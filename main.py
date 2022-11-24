@@ -7,7 +7,7 @@ import checkPos
 
 PROD_EPS: float = 30.0
 lineCount: int = 0
-
+width, height = 960, 1036
 
 def get_chess_line(input_image):
     """
@@ -42,6 +42,40 @@ def get_chess_line(input_image):
     return chessPoly.remove_same_line(lines)
 
 
+position = []
+
+
+def initialize_transform():
+    position.sort(key=lambda x: x[0] + x[1] * 2)
+
+    mat_from = np.float32(position)
+    mat_to = np.float32([[0, 0], [width, 0], [0, height], [width, height]])
+    trans = cv2.getPerspectiveTransform(mat_from, mat_to)
+
+    return trans
+
+
+def initialize_position(camera):
+    flag = 0
+    cv2.namedWindow("initialize")
+
+    res, image = camera.read()
+
+    def on_EVENT_LBUTTONDOWN(event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            position.append((x, y))
+            cv2.circle(image, (x, y), 3, (255, 0, 0), thickness=-1)
+
+    cv2.setMouseCallback("initialize", on_EVENT_LBUTTONDOWN)
+
+    cv2.imshow("initialize", image)
+    while True:
+        k = cv2.waitKey(100)
+        if k == 27 or len(position) >= 4:
+            cv2.destroyAllWindows()
+            break
+
+
 def split_frames_mp4(source_file_name):
     """
     The function `split_frames_mp4` takes a video file and splits it into frames, and then displays the frames in real
@@ -65,9 +99,20 @@ def split_frames_mp4(source_file_name):
     line_count = 0
     feature = 255 * 3 // 2
 
+    initialize_position(camera)
+
+    set_args = False
+    if len(position) >= 4:
+        warp_args = initialize_transform()
+        set_args = True
+
     while True:
         times += 1
         res, image = camera.read()
+
+        if set_args:
+            image = cv2.warpPerspective(image, warp_args, (width, height))
+
         if not res:
             # print('not res , not image')
             break
